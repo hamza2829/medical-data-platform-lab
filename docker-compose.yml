@@ -1,0 +1,64 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-medical_lab}
+      POSTGRES_USER: ${DB_USER:-medical_lab}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-demo-only-password}
+    volumes: [medical-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-medical_lab} -d ${DB_NAME:-medical_lab}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  mqtt:
+    image: eclipse-mosquitto:2
+    ports: ["1883:1883"]
+    volumes: [./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro]
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -h 127.0.0.1 -p 1883 -t healthcheck -m ok"]
+      interval: 8s
+      timeout: 4s
+      retries: 10
+  app:
+    build: .
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-demo-only-not-for-production}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-0}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,app}
+      DB_NAME: ${DB_NAME:-medical_lab}
+      DB_USER: ${DB_USER:-medical_lab}
+      DB_PASSWORD: ${DB_PASSWORD:-demo-only-password}
+      DB_HOST: db
+      DB_PORT: 5432
+      MQTT_HOST: mqtt
+      MQTT_PORT: 1883
+    command: ["sh", "-c", "python manage.py migrate --noinput && python manage.py seed_demo && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --access-logfile -"]
+    ports: ["8000:8000"]
+    depends_on:
+      db: {condition: service_healthy}
+      mqtt: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  mqtt-ingest:
+    build: .
+    command: ["python", "manage.py", "mqtt_ingest"]
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-demo-only-not-for-production}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,app}
+      DB_NAME: ${DB_NAME:-medical_lab}
+      DB_USER: ${DB_USER:-medical_lab}
+      DB_PASSWORD: ${DB_PASSWORD:-demo-only-password}
+      DB_HOST: db
+      DB_PORT: 5432
+      MQTT_HOST: mqtt
+      MQTT_PORT: 1883
+    depends_on:
+      app: {condition: service_healthy}
+      mqtt: {condition: service_healthy}
+    restart: unless-stopped
+volumes:
+  medical-data:
