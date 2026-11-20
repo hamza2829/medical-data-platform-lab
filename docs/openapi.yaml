@@ -1,0 +1,106 @@
+openapi: 3.1.0
+info:
+  title: Medical Data Platform Lab API
+  version: 1.0.0
+  description: Synthetic-only FHIR R4 API. All non-login endpoints use a DRF token.
+servers:
+  - url: http://localhost:8000/api
+security:
+  - TokenAuth: []
+paths:
+  /health/:
+    get:
+      security: []
+      summary: Service health and schema release
+      responses: {'200': {description: Healthy}}
+  /auth/token/:
+    post:
+      security: []
+      summary: Exchange demo username and password for a token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [username, password], properties: {username: {type: string}, password: {type: string, format: password}}}
+      responses: {'200': {description: Token and role profile}, '400': {description: Invalid credentials}}
+  /auth/logout/:
+    post: {summary: Revoke the current token, responses: {'204': {description: Revoked}}}
+  /patients/:
+    get:
+      summary: Search Patients as a FHIR Bundle
+      parameters: [{name: q, in: query, schema: {type: string}}]
+      responses: {'200': {description: Bundle of FHIR R4 Patient resources}}
+    post:
+      summary: Create a validated FHIR Patient (admin or clinician)
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Patient'}}}}
+      responses: {'201': {description: Created FHIR Patient}, '400': {description: FHIR validation error}, '403': {description: Role is read-only}}
+  /patients/{patientId}/:
+    parameters: [{name: patientId, in: path, required: true, schema: {type: string}}]
+    get: {summary: Read one Patient, responses: {'200': {description: FHIR Patient}, '404': {description: Not found}}}
+    patch: {summary: Update a Patient (admin or clinician), responses: {'200': {description: New version created}}}
+  /patients/{patientId}/observations/:
+    get: {summary: Read the patient's vital observations, responses: {'200': {description: FHIR Bundle of Observation resources}}}
+  /patients/{patientId}/analysis/:
+    get: {summary: Get trend points and threshold alerts, responses: {'200': {description: Trend and alert summary}}}
+  /patients/{patientId}/gdpr-export/:
+    get: {summary: Export the full synthetic patient record (admin or clinician), responses: {'200': {description: Patient and related observations as JSON}}}
+  /patients/{patientId}/gdpr-delete/:
+    delete: {summary: Permanently erase a patient and linked observations (admin only), responses: {'204': {description: Erased}, '404': {description: Not found}}}
+  /observations/:
+    get: {summary: Query Observations, parameters: [{name: patient, in: query, schema: {type: string}}], responses: {'200': {description: FHIR Bundle}}}
+    post:
+      summary: Create a validated Observation (admin or clinician)
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Observation'}}}}
+      responses: {'201': {description: Created}, '400': {description: Validation error}}
+  /devices/:
+    get: {summary: List FHIR Devices, responses: {'200': {description: FHIR Bundle}}}
+    post:
+      summary: Register a FHIR Device (admin or clinician)
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Device'}}}}
+      responses: {'201': {description: Created}}
+  /exports/pseudonymized/:
+    get: {summary: Export redacted patient and observation data (admin or researcher), responses: {'200': {description: Pseudonymized FHIR collection}}}
+  /users/:
+    get: {summary: List team users (admin only), responses: {'200': {description: User list}}}
+    post:
+      summary: Create a user with a role (admin only)
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [username, email, password, role], properties: {username: {type: string}, email: {type: string, format: email}, password: {type: string, format: password, minLength: 12}, role: {enum: [admin, clinician, researcher]}}}}}}
+      responses: {'201': {description: Created user without credentials}}
+  /users/{userId}/:
+    parameters: [{name: userId, in: path, required: true, schema: {type: integer}}]
+    patch: {summary: Update a user's role or active status (admin only), responses: {'200': {description: Updated user}}}
+    delete: {summary: Remove a user (admin only), responses: {'204': {description: Removed}}}
+  /audit/:
+    get: {summary: List recent metadata-only access events (admin only), responses: {'200': {description: Audit events contain no patient values or request body}}}
+components:
+  securitySchemes:
+    TokenAuth: {type: apiKey, in: header, name: Authorization, description: 'Use `Token <token>`'}
+  schemas:
+    Patient:
+      type: object
+      required: [resourceType, name]
+      properties:
+        resourceType: {const: Patient}
+        id: {type: string}
+        active: {type: boolean}
+        name: {type: array, minItems: 1, items: {type: object}}
+        gender: {enum: [male, female, other, unknown]}
+        birthDate: {type: string, format: date}
+    Observation:
+      type: object
+      required: [resourceType, status, code, subject, valueQuantity]
+      properties:
+        resourceType: {const: Observation}
+        id: {type: string}
+        status: {enum: [registered, preliminary, final, amended, corrected, cancelled, entered-in-error, unknown]}
+        code: {type: object, required: [coding], properties: {coding: {type: array, minItems: 1, items: {type: object, required: [system, code], properties: {system: {type: string, format: uri}, code: {type: string}}}}}}
+        subject: {type: object, required: [reference], properties: {reference: {type: string, pattern: '^Patient/'}}}
+        valueQuantity: {type: object, required: [value, unit], properties: {value: {type: number}, unit: {type: string}, system: {type: string, format: uri}, code: {type: string}}}
+    Device:
+      type: object
+      required: [resourceType, status, deviceName]
+      properties:
+        resourceType: {const: Device}
+        id: {type: string}
+        status: {enum: [active, inactive, entered-in-error, unknown]}
+        deviceName: {type: array, minItems: 1, items: {type: object, required: [name], properties: {name: {type: string}, type: {type: string}}}}

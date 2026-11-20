@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.test/medical-data-platform-lab/schema/1.0.0",
+  "title": "FHIR R4 resources accepted by Medical Data Platform Lab",
+  "description": "Version 1.0.0 validation profile for the synthetic Patient, Observation, and Device resources stored by this demo.",
+  "oneOf": [
+    {"$ref": "#/$defs/Patient"},
+    {"$ref": "#/$defs/Observation"},
+    {"$ref": "#/$defs/Device"}
+  ],
+  "$defs": {
+    "Coding": {"type": "object", "required": ["system", "code"], "properties": {"system": {"type": "string", "format": "uri"}, "code": {"type": "string"}, "display": {"type": "string"}}},
+    "Patient": {"type": "object", "required": ["resourceType", "name"], "properties": {"resourceType": {"const": "Patient"}, "id": {"type": "string", "maxLength": 64}, "active": {"type": "boolean"}, "name": {"type": "array", "minItems": 1, "items": {"type": "object", "properties": {"use": {"type": "string"}, "text": {"type": "string"}, "family": {"type": "string"}, "given": {"type": "array", "items": {"type": "string"}}}, "anyOf": [{"required": ["text"]}, {"required": ["family"]}, {"required": ["given"]}]}}, "gender": {"enum": ["male", "female", "other", "unknown"]}, "birthDate": {"type": "string", "format": "date"}, "identifier": {"type": "array"}, "meta": {"type": "object"}}},
+    "Observation": {"type": "object", "required": ["resourceType", "status", "code", "subject", "valueQuantity"], "properties": {"resourceType": {"const": "Observation"}, "id": {"type": "string", "maxLength": 64}, "status": {"enum": ["registered", "preliminary", "final", "amended", "corrected", "cancelled", "entered-in-error", "unknown"]}, "code": {"type": "object", "properties": {"coding": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/Coding"}}}, "required": ["coding"]}, "subject": {"type": "object", "properties": {"reference": {"type": "string", "pattern": "^Patient/"}}, "required": ["reference"]}, "device": {"type": "object", "properties": {"reference": {"type": "string", "pattern": "^Device/"}}}, "effectiveDateTime": {"type": "string", "format": "date-time"}, "valueQuantity": {"type": "object", "required": ["value", "unit"], "properties": {"value": {"type": "number"}, "unit": {"type": "string"}, "system": {"type": "string", "format": "uri"}, "code": {"type": "string"}}}, "meta": {"type": "object"}}},
+    "Device": {"type": "object", "required": ["resourceType", "status", "deviceName"], "properties": {"resourceType": {"const": "Device"}, "id": {"type": "string", "maxLength": 64}, "status": {"enum": ["active", "inactive", "entered-in-error", "unknown"]}, "deviceName": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string"}, "type": {"type": "string"}}}}, "type": {"type": "object"}, "meta": {"type": "object"}}}
+  }
+}
