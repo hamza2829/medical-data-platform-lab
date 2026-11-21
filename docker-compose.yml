@@ -13,7 +13,6 @@ services:
       retries: 12
   mqtt:
     image: eclipse-mosquitto:2
-    ports: ["1883:1883"]
     volumes: [./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro]
     healthcheck:
       test: ["CMD-SHELL", "mosquitto_pub -h 127.0.0.1 -p 1883 -t healthcheck -m ok"]
